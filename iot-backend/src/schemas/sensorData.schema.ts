@@ -1,30 +1,30 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 export const createSensorDataSchema = z.object({
-  temperature: z
-    .number()
-    .min(-50)
-    .max(100)
-    .describe('Temperature in Celsius'),
-  humidity: z
-    .number()
-    .min(0)
-    .max(100)
-    .describe('Humidity percentage'),
+  temperature: z.number().min(-50).max(100).describe("Temperature in Celsius"),
+  humidity: z.number().min(0).max(100).describe("Humidity percentage"),
   soilMoisture: z
     .number()
     .int()
     .min(0)
     .max(100)
-    .describe('Soil moisture percentage'),
+    .describe("Soil moisture percentage"),
   soilTemperature: z
     .number()
     .min(-50)
     .max(100)
     .optional()
-    .describe('Soil temperature in Celsius (optional)'),
-  rainDetected: z.boolean().describe('Whether rain is detected'),
-  waterLevel: z.string().describe('Water level status'),
+    .describe("Soil temperature in Celsius (optional)"),
+  rainDetected: z
+    .boolean()
+    .optional()
+    .default(false)
+    .describe("Whether rain is detected"),
+  waterLevel: z
+    .string()
+    .optional()
+    .default("UNKNOWN")
+    .describe("Water level status"),
 });
 
 export const sensorDataResponseSchema = z.object({
@@ -55,10 +55,6 @@ export const sensorDataQuerySchema = z.object({
   to: z.string().datetime().optional(),
 });
 
-export type CreateSensorDataInput = z.infer<
-  typeof createSensorDataSchema
->;
-export type SensorDataResponse = z.infer<
-  typeof sensorDataResponseSchema
->;
+export type CreateSensorDataInput = z.infer<typeof createSensorDataSchema>;
+export type SensorDataResponse = z.infer<typeof sensorDataResponseSchema>;
 export type SensorDataQuery = z.infer<typeof sensorDataQuerySchema>;

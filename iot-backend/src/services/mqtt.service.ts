@@ -1,28 +1,23 @@
-import mqtt, { MqttClient, IClientOptions } from 'mqtt';
+import mqtt, { MqttClient, IClientOptions } from "mqtt";
 
 // MQTT connection configuration - fallback to env if provided
 const MQTT_HOST = process.env.MQTT_HOST;
 const MQTT_PORT = Number(process.env.MQTT_PORT);
 const MQTT_PROTOCOL =
-  (process.env.MQTT_PROTOCOL as
-    | 'mqtts'
-    | 'wss'
-    | 'mqtt'
-    | undefined) || 'mqtts';
+  (process.env.MQTT_PROTOCOL as "mqtts" | "wss" | "mqtt" | undefined) || "mqtt";
 const MQTT_USERNAME = process.env.MQTT_USERNAME;
 const MQTT_PASSWORD = process.env.MQTT_PASSWORD;
 
 function assertEnv() {
   const missing: string[] = [];
-  if (!MQTT_HOST) missing.push('MQTT_HOST');
-  if (!MQTT_PORT || Number.isNaN(MQTT_PORT))
-    missing.push('MQTT_PORT');
-  if (!MQTT_USERNAME) missing.push('MQTT_USERNAME');
-  if (!MQTT_PASSWORD) missing.push('MQTT_PASSWORD');
+  if (!MQTT_HOST) missing.push("MQTT_HOST");
+  if (!MQTT_PORT || Number.isNaN(MQTT_PORT)) missing.push("MQTT_PORT");
+  if (!MQTT_USERNAME) missing.push("MQTT_USERNAME");
+  if (!MQTT_PASSWORD) missing.push("MQTT_PASSWORD");
   if (missing.length) {
     throw new Error(
       `Missing MQTT env vars: ${missing.join(
-        ', ',
+        ", ",
       )}. Check your .env or deployment environment.`,
     );
   }
@@ -48,28 +43,31 @@ const createClient = () => {
   assertEnv();
   if (client) return client;
 
-  client = mqtt.connect(options);
+  client = mqtt.connect(
+    `${MQTT_PROTOCOL}://${MQTT_HOST}:${MQTT_PORT}`,
+    options,
+  );
 
-  client.on('connect', () => {
+  client.on("connect", () => {
     isReady = true;
     console.log(
-      '🔌 MQTT connected:',
+      "🔌 MQTT connected:",
       `${MQTT_PROTOCOL}://${MQTT_HOST}:${MQTT_PORT}`,
     );
   });
 
-  client.on('reconnect', () => {
+  client.on("reconnect", () => {
     isReady = false;
-    console.log('♻️  MQTT reconnecting...');
+    console.log("♻️  MQTT reconnecting...");
   });
 
-  client.on('close', () => {
+  client.on("close", () => {
     isReady = false;
-    console.log('🔒 MQTT connection closed');
+    console.log("🔒 MQTT connection closed");
   });
 
-  client.on('error', (err) => {
-    console.error('❌ MQTT error:', err.message);
+  client.on("error", (err) => {
+    console.error("❌ MQTT error:", err.message);
   });
 
   return client;
@@ -94,17 +92,17 @@ export const waitForMqttReady = (timeoutMs = 10_000): Promise<void> =>
     };
 
     const cleanup = () => {
-      client?.off('connect', onConnect);
-      client?.off('error', onError);
+      client?.off("connect", onConnect);
+      client?.off("error", onError);
       clearTimeout(timer);
     };
 
-    client?.once('connect', onConnect);
-    client?.once('error', onError);
+    client?.once("connect", onConnect);
+    client?.once("error", onError);
 
     const timer = setTimeout(() => {
       cleanup();
-      reject(new Error('MQTT connection timeout'));
+      reject(new Error("MQTT connection timeout"));
     }, timeoutMs);
   });
 
@@ -125,7 +123,7 @@ export const publishMessage = async (
   const isServerless = !!process.env.VERCEL;
 
   const data =
-    typeof payload === 'string' || Buffer.isBuffer(payload)
+    typeof payload === "string" || Buffer.isBuffer(payload)
       ? payload
       : Buffer.from(JSON.stringify(payload));
 
@@ -146,14 +144,14 @@ export const publishMessage = async (
 
     await new Promise<void>((resolve, reject) => {
       const t = setTimeout(
-        () => reject(new Error('MQTT connect timeout')),
+        () => reject(new Error("MQTT connect timeout")),
         6_000,
       );
-      conn.once('connect', () => {
+      conn.once("connect", () => {
         clearTimeout(t);
         resolve();
       });
-      conn.once('error', (e) => {
+      conn.once("error", (e) => {
         clearTimeout(t);
         reject(e);
       });

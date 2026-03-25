@@ -1,9 +1,12 @@
 // Centralized API client and shared types for the dashboard
+
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "";
 export const MQTT_SERVICE_BASE_URL =
   process.env.NEXT_PUBLIC_MQTT_SERVICE_BASE_URL || "";
 export const MQTT_COMMAND_TOPIC =
   process.env.NEXT_PUBLIC_MQTT_COMMAND_TOPIC || "farm/relay/command";
+
+// ---------------- TYPES ----------------
 
 export type ApiEnvelope<T> = {
   data: T;
@@ -26,7 +29,7 @@ export type PaginatedResult<T> = {
 };
 
 export type SensorDataBE = {
-  id: string; // BigInt serialized as string
+  id: string;
   temperature: number;
   humidity: number;
   soilMoisture: number;
@@ -58,12 +61,18 @@ export type MqttHealthResponse = {
   timestamp: string;
 };
 
+// ---------------- CORE HTTP ----------------
+
 async function http<T>(
   path: string,
   init?: RequestInit,
   isMqtt: boolean = false,
 ): Promise<T> {
   const BASE_URL = isMqtt ? MQTT_SERVICE_BASE_URL : API_BASE_URL;
+
+  // ✅ FIX: always ensure /api prefix
+  // const finalPath = path.startsWith("/api") ? path : `/api${path}`;
+
   const url = path.startsWith("http") ? path : `${BASE_URL}${path}`;
 
   console.log("BASE:", BASE_URL);
@@ -76,26 +85,29 @@ async function http<T>(
       "Content-Type": "application/json",
       ...(init?.headers || {}),
     },
-    // Important for Next.js client components
     cache: "no-store",
   });
+
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`API ${res.status}: ${text}`);
   }
+
   return (await res.json()) as T;
 }
 
-// Sensor Data API
+// ---------------- SENSOR DATA ----------------
+
 export async function fetchSensorDataPage(limit = 10, offset = 0) {
   const search = new URLSearchParams({
     limit: String(limit),
     offset: String(offset),
   });
+
   const json = await http<ApiEnvelope<PaginatedResult<SensorDataBE>>>(
     "/sensor-data?" + search.toString(),
   );
-  console.log("fetchSensorDataPage", json);
+
   return json.data;
 }
 
@@ -106,32 +118,18 @@ export async function fetchLatestSensorData() {
   return json.data;
 }
 
-export async function fetchSensorDataRange(params: {
-  from?: string;
-  to?: string;
-  limit?: number;
-  offset?: number;
-}) {
-  const search = new URLSearchParams();
-  if (params.limit != null) search.set("limit", String(params.limit));
-  if (params.offset != null) search.set("offset", String(params.offset));
-  if (params.from) search.set("from", params.from);
-  if (params.to) search.set("to", params.to);
-  const json = await http<ApiEnvelope<PaginatedResult<SensorDataBE>>>(
-    "/sensor-data?" + search.toString(),
-  );
-  return json.data;
-}
+// ---------------- RELAY LOG ----------------
 
-// Relay Log API
 export async function fetchRelayLogs(limit = 10, offset = 0) {
   const search = new URLSearchParams({
     limit: String(limit),
     offset: String(offset),
   });
+
   const json = await http<ApiEnvelope<PaginatedResult<RelayLogBE>>>(
     "/relay-log?" + search.toString(),
   );
+
   return json.data;
 }
 
@@ -140,26 +138,8 @@ export async function fetchLatestRelayLog() {
   return json.data;
 }
 
-export async function fetchRelayDuration(params?: {
-  from?: string;
-  to?: string;
-}) {
-  // Optional endpoint; if not available, caller should fallback to client-side calc
-  const search = new URLSearchParams();
-  if (params?.from) search.set("from", params.from);
-  if (params?.to) search.set("to", params.to);
-  try {
-    const json = await http<ApiEnvelope<{ totalOnMs: number }>>(
-      "/relay-log/duration" + (search.size ? `?${search}` : ""),
-    );
-    return json.data;
-  } catch {
-    // Swallow if endpoint not implemented
-    return null;
-  }
-}
+// ---------------- HEALTH ----------------
 
-// Health APIs
 export async function fetchApiHealth() {
   return http<HealthResponse>("/health");
 }
@@ -168,11 +148,13 @@ export async function fetchDbHealth() {
   return http<HealthResponse>("/db-test");
 }
 
+// ✅ FIXED HERE
 export async function fetchMqttHealth() {
   return http<MqttHealthResponse>("/mqtt/health", undefined, true);
 }
 
-// MQTT Publish
+// ---------------- MQTT ----------------
+
 export async function publishRelayCommand(payload: {
   relayStatus: boolean;
   sensorReadingId?: string;
@@ -191,12 +173,9 @@ export async function publishRelayCommand(payload: {
     qos: payload.qos ?? 1,
     retain: payload.retain ?? false,
   };
-  return http<{
-    success: boolean;
-    message?: string;
-    relayPersisted?: boolean;
-    relayMessage?: string;
-  }>("/mqtt/publish", {
+
+  // ✅ FIXED HERE
+  return http("/mqtt/publish", {
     method: "POST",
     body: JSON.stringify(body),
   });

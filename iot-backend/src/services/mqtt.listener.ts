@@ -1,101 +1,80 @@
-import type { ISubscriptionMap } from 'mqtt';
-import { getMqttClient, waitForMqttReady } from './mqtt.service.js';
-import { createSensorDataSchema } from '../schemas/sensorData.schema.js';
-import { SensorDataService } from './sensorData.service.js';
-import { RelayLogService } from './relayLog.service.js';
+import type { ISubscriptionMap } from "mqtt";
+import { getMqttClient, waitForMqttReady } from "./mqtt.service.js";
+import { createSensorDataSchema } from "../schemas/sensorData.schema.js";
+import { SensorDataService } from "./sensorData.service.js";
+import { RelayLogService } from "./relayLog.service.js";
 import {
   matchTopic,
   tryParseJSON,
   extractRelayStatus,
   toBigIntId,
-} from '../utils/mqtt.utils.js';
+} from "../utils/mqtt.utils.js";
 
 const sensorService = new SensorDataService();
 const relayService = new RelayLogService();
 
-const RAW_SENSOR_TOPICS =
-  process.env.MQTT_SENSOR_TOPICS || 'sf/+/sensor';
-const RAW_RELAY_TOPICS =
-  process.env.MQTT_RELAY_TOPICS || 'sf/+/relay';
+const RAW_SENSOR_TOPICS = process.env.MQTT_SENSOR_TOPICS || "sf/+/sensor";
+const RAW_RELAY_TOPICS = process.env.MQTT_RELAY_TOPICS || "sf/+/relay";
 
-const SENSOR_TOPICS = RAW_SENSOR_TOPICS.split(',')
+const SENSOR_TOPICS = RAW_SENSOR_TOPICS.split(",")
   .map((t) => t.trim())
   .filter(Boolean);
-const RELAY_TOPICS = RAW_RELAY_TOPICS.split(',')
+const RELAY_TOPICS = RAW_RELAY_TOPICS.split(",")
   .map((t) => t.trim())
   .filter(Boolean);
 
 // All topics to subscribe to
-const SUB_TOPICS = Array.from(
-  new Set([...SENSOR_TOPICS, ...RELAY_TOPICS]),
-);
+const SUB_TOPICS = Array.from(new Set([...SENSOR_TOPICS, ...RELAY_TOPICS]));
 
 const isSensorTopic = (topic: string): boolean =>
-  SENSOR_TOPICS.some((t) => matchTopic(t, topic)) ||
-  topic.includes('/sensor');
+  SENSOR_TOPICS.some((t) => matchTopic(t, topic)) || topic.includes("/sensor");
 
 const isRelayTopic = (topic: string): boolean =>
-  RELAY_TOPICS.some((t) => matchTopic(t, topic)) ||
-  topic.includes('/relay');
+  RELAY_TOPICS.some((t) => matchTopic(t, topic)) || topic.includes("/relay");
 
-const handleSensorMessage = async (
-  topic: string,
-  payload: Buffer,
-) => {
+const handleSensorMessage = async (topic: string, payload: Buffer) => {
   const json = tryParseJSON(payload);
-  if (!json || typeof json !== 'object') {
-    console.warn(
-      `[MQTT] Ignoring non-JSON or empty message on ${topic}`,
-    );
+  if (!json || typeof json !== "object") {
+    console.warn(`[MQTT] Ignoring non-JSON or empty message on ${topic}`);
     return;
   }
 
   // Validate and normalize using schema
-  const parsed = createSensorDataSchema.safeParse(json);
-  if (!parsed.success) {
-    console.warn(
-      '[MQTT] Invalid sensor payload:',
-      parsed.error.flatten(),
-    );
-    return;
-  }
-
+  const parsed = createSensorDataSchema.parse(json);
   try {
-    const res = await sensorService.createSensorData(parsed.data);
+    const data = createSensorDataSchema.parse(json);
+
+    const res = await sensorService.createSensorData(data);
+
     if (!res.success) {
-      console.warn(
-        '[MQTT] Failed to store sensor data:',
-        res.message,
-      );
+      console.warn("[MQTT] Failed to store sensor data:", res.message);
     } else {
-      console.log('[MQTT] Sensor data stored from', topic);
+      console.log("[MQTT] Sensor data stored from", topic);
     }
-  } catch (err) {
-    console.error('[MQTT] Error storing sensor data:', err);
+  } catch (err: any) {
+    console.warn("[MQTT] Invalid sensor payload:", err.errors);
   }
 };
 
 const handleRelayMessage = async (topic: string, payload: Buffer) => {
   const json = tryParseJSON(payload);
-  if (!json || typeof json !== 'object') {
-    console.warn(
-      `[MQTT] Ignoring non-JSON relay message on ${topic}`,
-    );
+  if (!json || typeof json !== "object") {
+    console.warn(`[MQTT] Ignoring non-JSON relay message on ${topic}`);
     return;
   }
 
   const relayStatus = extractRelayStatus(json);
   if (relayStatus === null) {
-    console.warn('[MQTT] Relay payload missing status/state');
+    console.warn("[MQTT] Relay payload missing status/state");
     return;
   }
 
   const triggerReason: string =
-    typeof (json as any).triggerReason === 'string'
+    typeof (json as any).triggerReason === "string"
       ? (json as any).triggerReason
-      : typeof (json as any).reason === 'string'
-      ? (json as any).reason
-      : 'auto';
+      : typeof (json as any).reason === "string"
+        ? (json as any).reason
+        : "auto";
 
   // Determine sensorReadingId from payload or latest or nested sensor object
   let sensorReadingId = toBigIntId((json as any).sensorReadingId);
@@ -104,22 +83,18 @@ const handleRelayMessage = async (topic: string, payload: Buffer) => {
   if (
     !sensorReadingId &&
     (json as any).sensor &&
-    typeof (json as any).sensor === 'object'
+    typeof (json as any).sensor === "object"
   ) {
-    const parsed = createSensorDataSchema.safeParse(
-      (json as any).sensor,
-    );
+    const parsed = createSensorDataSchema.safeParse((json as any).sensor);
     if (parsed.success) {
       try {
-        const created = await sensorService.createSensorData(
-          parsed.data,
-        );
+        const created = await sensorService.createSensorData(parsed.data);
         const id: any = created.data?.id;
         const idBig = toBigIntId(id);
         if (idBig) sensorReadingId = idBig;
       } catch (e) {
         console.error(
-          '[MQTT] Failed to create sensor data from relay message:',
+          "[MQTT] Failed to create sensor data from relay message:",
           e,
         );
       }
@@ -135,7 +110,7 @@ const handleRelayMessage = async (topic: string, payload: Buffer) => {
       if (idBig) sensorReadingId = idBig;
     } catch (e) {
       console.error(
-        '[MQTT] Failed to retrieve latest sensor data for relay log:',
+        "[MQTT] Failed to retrieve latest sensor data for relay log:",
         e,
       );
     }
@@ -143,7 +118,7 @@ const handleRelayMessage = async (topic: string, payload: Buffer) => {
 
   if (!sensorReadingId) {
     console.warn(
-      '[MQTT] No sensorReadingId available for relay log; skipping.',
+      "[MQTT] No sensorReadingId available for relay log; skipping.",
     );
     return;
   }
@@ -155,17 +130,17 @@ const handleRelayMessage = async (topic: string, payload: Buffer) => {
       sensorReadingId,
     );
     if (!res.success) {
-      console.warn('[MQTT] Relay log not stored:', res.message);
+      console.warn("[MQTT] Relay log not stored:", res.message);
     } else {
       console.log(
-        '[MQTT] Relay state logged from',
+        "[MQTT] Relay state logged from",
         topic,
-        '->',
-        relayStatus ? 'ON' : 'OFF',
+        "->",
+        relayStatus ? "ON" : "OFF",
       );
     }
   } catch (err) {
-    console.error('[MQTT] Error storing relay log:', err);
+    console.error("[MQTT] Error storing relay log:", err);
   }
 };
 
@@ -180,10 +155,7 @@ export const startMqttListeners = async () => {
   await new Promise<void>((resolve, reject) => {
     client.subscribe(subs, (err) => {
       if (err) return reject(err);
-      console.log(
-        '📡 MQTT subscribed to topics:',
-        SUB_TOPICS.join(', '),
-      );
+      console.log("📡 MQTT subscribed to topics:", SUB_TOPICS.join(", "));
       resolve();
     });
   });
@@ -202,11 +174,11 @@ export const startMqttListeners = async () => {
       // Unknown topic; ignore but keep a trace for later wiring
       // console.debug('[MQTT] Message on unhandled topic', topic);
     } catch (e) {
-      console.error('[MQTT] Message handler error:', e);
+      console.error("[MQTT] Message handler error:", e);
     }
   };
 
   // Ensure we don't attach multiple times across hot reloads
-  client.removeAllListeners('message');
-  client.on('message', onMessage);
+  client.removeAllListeners("message");
+  client.on("message", onMessage);
 };
