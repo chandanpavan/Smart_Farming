@@ -10,6 +10,7 @@
 #include "actuators/ModemRelay.h"
 #include "display/OLEDDisplay.h"
 #include "network/MQTTClient.h"
+#include "config.h"
 
 void initializeComponents();
 bool readAllSensors();

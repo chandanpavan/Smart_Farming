@@ -1,10 +1,9 @@
 // Centralized API client and shared types for the dashboard
-export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || '';
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "";
 export const MQTT_SERVICE_BASE_URL =
-  process.env.NEXT_PUBLIC_MQTT_SERVICE_BASE_URL || '';
+  process.env.NEXT_PUBLIC_MQTT_SERVICE_BASE_URL || "";
 export const MQTT_COMMAND_TOPIC =
-  process.env.NEXT_PUBLIC_MQTT_COMMAND_TOPIC || 'farm/relay/command';
+  process.env.NEXT_PUBLIC_MQTT_COMMAND_TOPIC || "farm/relay/command";
 
 export type ApiEnvelope<T> = {
   data: T;
@@ -65,15 +64,20 @@ async function http<T>(
   isMqtt: boolean = false,
 ): Promise<T> {
   const BASE_URL = isMqtt ? MQTT_SERVICE_BASE_URL : API_BASE_URL;
-  const url = path.startsWith('http') ? path : `${BASE_URL}${path}`;
+  const url = path.startsWith("http") ? path : `${BASE_URL}${path}`;
+
+  console.log("BASE:", BASE_URL);
+  console.log("PATH:", path);
+  console.log("FINAL URL:", url);
+
   const res = await fetch(url, {
     ...init,
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       ...(init?.headers || {}),
     },
     // Important for Next.js client components
-    cache: 'no-store',
+    cache: "no-store",
   });
   if (!res.ok) {
     const text = await res.text();
@@ -89,15 +93,15 @@ export async function fetchSensorDataPage(limit = 10, offset = 0) {
     offset: String(offset),
   });
   const json = await http<ApiEnvelope<PaginatedResult<SensorDataBE>>>(
-    '/sensor-data?' + search.toString(),
+    "/sensor-data?" + search.toString(),
   );
-  console.log('fetchSensorDataPage', json);
+  console.log("fetchSensorDataPage", json);
   return json.data;
 }
 
 export async function fetchLatestSensorData() {
   const json = await http<ApiEnvelope<SensorDataBE | null>>(
-    '/sensor-data/latest',
+    "/sensor-data/latest",
   );
   return json.data;
 }
@@ -109,13 +113,12 @@ export async function fetchSensorDataRange(params: {
   offset?: number;
 }) {
   const search = new URLSearchParams();
-  if (params.limit != null) search.set('limit', String(params.limit));
-  if (params.offset != null)
-    search.set('offset', String(params.offset));
-  if (params.from) search.set('from', params.from);
-  if (params.to) search.set('to', params.to);
+  if (params.limit != null) search.set("limit", String(params.limit));
+  if (params.offset != null) search.set("offset", String(params.offset));
+  if (params.from) search.set("from", params.from);
+  if (params.to) search.set("to", params.to);
   const json = await http<ApiEnvelope<PaginatedResult<SensorDataBE>>>(
-    '/sensor-data?' + search.toString(),
+    "/sensor-data?" + search.toString(),
   );
   return json.data;
 }
@@ -127,15 +130,13 @@ export async function fetchRelayLogs(limit = 10, offset = 0) {
     offset: String(offset),
   });
   const json = await http<ApiEnvelope<PaginatedResult<RelayLogBE>>>(
-    '/relay-log?' + search.toString(),
+    "/relay-log?" + search.toString(),
   );
   return json.data;
 }
 
 export async function fetchLatestRelayLog() {
-  const json = await http<ApiEnvelope<RelayLogBE | null>>(
-    '/relay-log/latest',
-  );
+  const json = await http<ApiEnvelope<RelayLogBE | null>>("/relay-log/latest");
   return json.data;
 }
 
@@ -145,11 +146,11 @@ export async function fetchRelayDuration(params?: {
 }) {
   // Optional endpoint; if not available, caller should fallback to client-side calc
   const search = new URLSearchParams();
-  if (params?.from) search.set('from', params.from);
-  if (params?.to) search.set('to', params.to);
+  if (params?.from) search.set("from", params.from);
+  if (params?.to) search.set("to", params.to);
   try {
     const json = await http<ApiEnvelope<{ totalOnMs: number }>>(
-      '/relay-log/duration' + (search.size ? `?${search}` : ''),
+      "/relay-log/duration" + (search.size ? `?${search}` : ""),
     );
     return json.data;
   } catch {
@@ -160,15 +161,15 @@ export async function fetchRelayDuration(params?: {
 
 // Health APIs
 export async function fetchApiHealth() {
-  return http<HealthResponse>('/health');
+  return http<HealthResponse>("/health");
 }
 
 export async function fetchDbHealth() {
-  return http<HealthResponse>('/db-test');
+  return http<HealthResponse>("/db-test");
 }
 
 export async function fetchMqttHealth() {
-  return http<MqttHealthResponse>('/mqtt/health', undefined, true);
+  return http<MqttHealthResponse>("/mqtt/health", undefined, true);
 }
 
 // MQTT Publish
@@ -195,8 +196,8 @@ export async function publishRelayCommand(payload: {
     message?: string;
     relayPersisted?: boolean;
     relayMessage?: string;
-  }>('/mqtt/publish', {
-    method: 'POST',
+  }>("/mqtt/publish", {
+    method: "POST",
     body: JSON.stringify(body),
   });
 }
